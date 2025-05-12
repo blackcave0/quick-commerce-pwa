@@ -1,58 +1,97 @@
-import type React from "react"
-import type { ReactNode } from "react"
+"use client"
+
+import { useState, useEffect } from "react"
+import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { BarChart3, Home, Package, Settings, ShoppingBag, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { VendorProvider } from "@/lib/context/vendor-provider"
-import FCMInitializer from "@/components/vendor/fcm-initializer"
+import { VendorProvider, useVendor } from "@/lib/context/vendor-provider"
+import { Sidebar } from "@/components/vendor/sidebar"
+import Spinner from "@/components/ui/spinner"
 
-export default function VendorLayout({ children }: { children: ReactNode }) {
+// Redirect component that handles vendor authentication status
+function VendorAuthRedirect({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading, vendor } = useVendor()
+  const pathname = usePathname()
+  const router = useRouter()
+  const [isClient, setIsClient] = useState(false)
+
+  // Skip auth check for login and auth-check pages
+  const isAuthPage = pathname === "/vendor/login" || pathname === "/vendor/auth-check"
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  useEffect(() => {
+    if (isClient && !isLoading) {
+      // If not authenticated and not on auth page, redirect to login
+      if (!isAuthenticated && !isAuthPage) {
+        console.log("Redirecting to login page")
+        router.push("/vendor/login")
+      }
+      // If authenticated but not active status and not on auth check page
+      else if (isAuthenticated && vendor && vendor.status !== "active" && pathname !== "/vendor/auth-check") {
+        console.log(`Redirecting to auth check page. Vendor status: ${vendor.status}`)
+        router.push("/vendor/auth-check")
+      }
+      // If on login page but already authenticated, redirect to dashboard
+      else if (isAuthenticated && pathname === "/vendor/login") {
+        console.log("Already authenticated, redirecting to dashboard")
+        router.push("/vendor")
+      }
+    }
+  }, [isAuthenticated, isLoading, isClient, pathname, router, vendor])
+
+  // Show loading when auth state is being determined
+  if (isLoading || !isClient) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  // For login page or auth check page, just render the page
+  if (isAuthPage) {
+    return <>{children}</>
+  }
+
+  // For protected pages, check if authenticated and active
+  if (!isAuthenticated) {
+    return null // Will redirect on mount
+  }
+
+  // If user is authenticated but not active, redirect to auth check
+  if (vendor && vendor.status !== "active") {
+    return null // Will redirect on mount
+  }
+
+  // Otherwise, render the protected children
+  return <>{children}</>
+}
+
+export default function VendorLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
+
+  // Check if it's the login page
+  const isLoginPage = pathname === "/vendor/login"
+  const isAuthCheckPage = pathname === "/vendor/auth-check"
+
   return (
     <VendorProvider>
-      <FCMInitializer />
-      <div className="min-h-screen flex">
-        <aside className="w-64 bg-gray-800 text-white p-4 hidden md:block">
-          <div className="mb-8">
-            <h1 className="text-xl font-bold">Vendor Dashboard</h1>
+      <VendorAuthRedirect>
+        {isLoginPage || isAuthCheckPage ? (
+          <main className="h-screen">{children}</main>
+        ) : (
+          <div className="flex min-h-screen flex-col">
+            <div className="container flex-1 items-start md:grid md:grid-cols-[220px_minmax(0,1fr)] md:gap-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-10">
+              <Sidebar />
+              <main className="relative py-6">{children}</main>
+            </div>
           </div>
-
-          <nav className="space-y-1">
-            <NavItem href="/vendor" icon={<Home size={18} />} label="Dashboard" />
-            <NavItem href="/vendor/products" icon={<Package size={18} />} label="Products" />
-            <NavItem href="/vendor/orders" icon={<ShoppingBag size={18} />} label="Orders" />
-            <NavItem href="/vendor/profile" icon={<User size={18} />} label="Profile" />
-            <NavItem href="/vendor/analytics" icon={<BarChart3 size={18} />} label="Analytics" />
-            <NavItem href="/vendor/settings" icon={<Settings size={18} />} label="Settings" />
-          </nav>
-        </aside>
-
-        <div className="flex-1 flex flex-col">
-          <header className="bg-white border-b h-16 flex items-center px-4 md:px-6">
-            <Button variant="outline" size="sm" className="md:hidden mr-4">
-              <span className="sr-only">Toggle menu</span>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-              >
-                <line x1="3" x2="21" y1="6" y2="6" />
-                <line x1="3" x2="21" y1="12" y2="12" />
-                <line x1="3" x2="21" y1="18" y2="18" />
-              </svg>
-            </Button>
-            <h1 className="text-lg font-medium">Vendor Dashboard</h1>
-          </header>
-
-          <main className="flex-1 p-4 md:p-6 bg-gray-50 overflow-auto">{children}</main>
-        </div>
-      </div>
+        )}
+      </VendorAuthRedirect>
     </VendorProvider>
   )
 }
