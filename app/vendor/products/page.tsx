@@ -5,7 +5,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { useVendor } from "@/lib/context/vendor-provider"
 import { db } from "@/lib/firebase/config"
-import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -13,9 +13,20 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, Loader2, Trash2, Edit, ShoppingBag } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toast } from "@/components/ui/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog"
+import { deleteProductImage } from "@/lib/cloudinary/upload"
 
 interface Product {
   id: string
@@ -25,6 +36,12 @@ interface Product {
   price: number
   mrp: number
   image: string
+  imagePublicId?: string
+  additionalImages?: Array<{
+    url: string;
+    path?: string;
+    public_id?: string;
+  }>
   unit: string
   stock: number
   vendorId: string
@@ -38,6 +55,8 @@ export default function VendorProductsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [editingProduct, setEditingProduct] = useState<{ id: string, price: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Fetch products for this vendor
   useEffect(() => {
@@ -48,6 +67,46 @@ export default function VendorProductsPage() {
       setError(null)
 
       try {
+        // For test vendor in development
+        if (process.env.NODE_ENV === 'development' && vendor.id === 'test-vendor-id') {
+          // Return mock data after a short delay to simulate API call
+          setTimeout(() => {
+            const mockProducts: Product[] = [
+              {
+                id: 'test-product-1',
+                name: 'Test Product 1',
+                description: 'This is a test product',
+                category: 'grocery',
+                price: 99,
+                mrp: 120,
+                image: '/placeholder.svg',
+                unit: 'pcs',
+                stock: 100,
+                vendorId: 'test-vendor-id',
+                pincodes: ['110001', '110002'],
+                status: 'active'
+              },
+              {
+                id: 'test-product-2',
+                name: 'Test Product 2',
+                description: 'This is another test product',
+                category: 'fruits-vegetables',
+                price: 50,
+                mrp: 60,
+                image: '/placeholder.svg',
+                unit: 'kg',
+                stock: 20,
+                vendorId: 'test-vendor-id',
+                pincodes: ['110001'],
+                status: 'out_of_stock'
+              }
+            ];
+            setProducts(mockProducts);
+            setIsLoading(false);
+          }, 500);
+          return;
+        }
+
         const productsQuery = query(
           collection(db, "products"),
           where("vendorId", "==", vendor.id),
@@ -75,6 +134,22 @@ export default function VendorProductsPage() {
   const toggleProductStatus = async (productId: string, currentStatus: Product["status"]) => {
     try {
       const newStatus = currentStatus === "active" ? "out_of_stock" : "active"
+
+      // For test vendor in development
+      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
+        // Update local state only
+        setProducts(products.map(product =>
+          product.id === productId
+            ? { ...product, status: newStatus }
+            : product
+        ))
+
+        toast({
+          title: "Status updated",
+          description: `Product is now ${newStatus === "active" ? "in stock" : "out of stock"}.`,
+        })
+        return;
+      }
 
       await updateDoc(doc(db, "products", productId), {
         status: newStatus
@@ -110,6 +185,25 @@ export default function VendorProductsPage() {
     if (!editingProduct) return
 
     try {
+      // For test vendor in development
+      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
+        // Update local state only
+        setProducts(products.map(product =>
+          product.id === editingProduct.id
+            ? { ...product, price: editingProduct.price }
+            : product
+        ))
+
+        toast({
+          title: "Price updated",
+          description: "Product price has been updated successfully.",
+        })
+
+        // Clear editing state
+        setEditingProduct(null)
+        return;
+      }
+
       await updateDoc(doc(db, "products", editingProduct.id), {
         price: editingProduct.price
       })
@@ -137,8 +231,82 @@ export default function VendorProductsPage() {
     }
   }
 
+  // Delete product
+  const deleteProduct = async () => {
+    if (!productToDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      // For test vendor in development
+      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
+        // Update local state only to remove the product
+        setProducts(products.filter(p => p.id !== productToDelete.id));
+
+        toast({
+          title: "Product deleted",
+          description: "Product has been deleted successfully.",
+        });
+
+        setProductToDelete(null);
+        setIsDeleting(false);
+        return;
+      }
+
+      // First, delete the product image from Cloudinary if it exists
+      if (productToDelete.imagePublicId) {
+        try {
+          await deleteProductImage(productToDelete.imagePublicId);
+        } catch (error) {
+          console.error("Error deleting product image:", error);
+          // Continue with product deletion even if image deletion fails
+        }
+      }
+
+      // Delete any additional images if they exist
+      if (productToDelete.additionalImages && Array.isArray(productToDelete.additionalImages)) {
+        for (const img of productToDelete.additionalImages) {
+          // Handle both Cloudinary public_id and Firebase path
+          const imageId = img.public_id || img.path;
+          if (imageId) {
+            try {
+              await deleteProductImage(imageId);
+            } catch (error) {
+              console.error("Error deleting additional image:", error);
+              // Continue anyway
+            }
+          }
+        }
+      }
+
+      // Then delete the product from Firestore
+      await deleteDoc(doc(db, "products", productToDelete.id));
+
+      // Update local state
+      setProducts(products.filter(p => p.id !== productToDelete.id));
+
+      toast({
+        title: "Product deleted",
+        description: "Product has been deleted successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete product",
+        description: error.message,
+      });
+    } finally {
+      setProductToDelete(null);
+      setIsDeleting(false);
+    }
+  };
+
   if (!vendor) {
-    return <div>Loading...</div>
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      </div>
+    );
   }
 
   return (
@@ -191,11 +359,15 @@ export default function VendorProductsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="py-8 text-center">Loading products...</div>
+            <div className="py-8 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              <p>Loading products...</p>
+            </div>
           ) : products.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-gray-500">No products found.</p>
-              <Button className="mt-4" asChild>
+              <ShoppingBag className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 mb-4">No products found.</p>
+              <Button asChild>
                 <Link href="/vendor/products/add">Add Your First Product</Link>
               </Button>
             </div>
@@ -249,11 +421,11 @@ export default function VendorProductsPage() {
                           </Button>
                         </div>
                       ) : (
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center gap-2">
                           <span>₹{product.price}</span>
                           <Button
+                            variant="ghost"
                             size="sm"
-                            variant="outline"
                             onClick={() => startEditingPrice(product.id, product.price)}
                           >
                             Edit
@@ -262,29 +434,33 @@ export default function VendorProductsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-2">
                         <Switch
                           checked={product.status === "active"}
                           onCheckedChange={() => toggleProductStatus(product.id, product.status)}
                         />
                         <Badge
                           variant={product.status === "active" ? "default" : "secondary"}
-                          className={
-                            product.status === "active"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }
                         >
                           {product.status === "active" ? "In Stock" : "Out of Stock"}
                         </Badge>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm" asChild>
+                      <div className="flex items-center gap-2">
+                        <Button asChild size="sm" variant="outline">
                           <Link href={`/vendor/products/edit/${product.id}`}>
+                            <Edit className="h-4 w-4 mr-1" />
                             Edit
                           </Link>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => setProductToDelete(product)}
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -295,6 +471,41 @@ export default function VendorProductsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!productToDelete} onOpenChange={(open) => !open && setProductToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{productToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setProductToDelete(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={deleteProduct}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Product"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
