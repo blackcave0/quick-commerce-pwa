@@ -22,6 +22,13 @@ export interface Product {
   mrp: number
   category: string
   image: string
+  imagePath?: string
+  imagePublicId?: string
+  additionalImages?: Array<{
+    url: string;
+    path?: string;
+    public_id?: string;
+  }>
   unit: string
   stock: number
   vendorId: string
@@ -124,15 +131,32 @@ export const getProductById = async (productId: string) => {
 
 export const addProduct = async (product: Omit<Product, "id" | "createdAt" | "updatedAt">) => {
   try {
+    // Validate required fields
+    const requiredFields = ["name", "description", "price", "mrp", "category", "image", "unit", "vendorId", "pincodes"];
+    for (const field of requiredFields) {
+      if (!product[field as keyof typeof product]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
+    // Ensure pincodes is an array
+    if (!Array.isArray(product.pincodes) || product.pincodes.length === 0) {
+      throw new Error("Product must have at least one pincode for delivery area");
+    }
+
+    // Add the document to Firestore
     const docRef = await addDoc(collection(db, "products"), {
       ...product,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    })
-    return { id: docRef.id, ...product }
+    });
+
+    console.log("Product added successfully with ID:", docRef.id);
+
+    return { id: docRef.id, ...product };
   } catch (error) {
-    console.error("Error adding product:", error)
-    throw error
+    console.error("Error adding product:", error);
+    throw error;
   }
 }
 
