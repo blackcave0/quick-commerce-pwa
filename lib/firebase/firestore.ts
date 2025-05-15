@@ -79,19 +79,52 @@ export interface Order {
 // Products
 export const getProductsByPincode = async (pincode: string) => {
   try {
+    console.log(`Fetching products for pincode: ${pincode}`);
     const q = query(
       collection(db, "products"),
       where("pincodes", "array-contains", pincode),
       where("status", "==", "active"),
     )
     const querySnapshot = await getDocs(q)
-    return querySnapshot.docs.map((doc) => ({
+    const products = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     })) as Product[]
+    
+    console.log(`Found ${products.length} products for pincode ${pincode}`);
+    if (products.length > 0) {
+      console.log(`Sample product categories: ${products.slice(0, 3).map(p => p.category).join(', ')}`);
+      console.log(`Sample product: ${JSON.stringify(products[0], null, 2)}`);
+    }
+    
+    return products;
   } catch (error) {
     console.error("Error getting products by pincode:", error)
     return []
+  }
+}
+
+// Get all unique categories that have products for a specific pincode
+export const getCategoriesByPincode = async (pincode: string) => {
+  try {
+    console.log(`Fetching categories for pincode: ${pincode}`);
+    const products = await getProductsByPincode(pincode);
+    
+    // Extract unique categories
+    const categorySet = new Set<string>();
+    products.forEach(product => {
+      if (product.category) {
+        categorySet.add(product.category);
+      }
+    });
+    
+    const categories = Array.from(categorySet);
+    console.log(`Found ${categories.length} unique categories for pincode ${pincode}: ${categories.join(', ')}`);
+    
+    return categories;
+  } catch (error) {
+    console.error("Error getting categories by pincode:", error);
+    return [];
   }
 }
 

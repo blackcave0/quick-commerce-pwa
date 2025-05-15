@@ -15,7 +15,7 @@ import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { updateProduct } from "@/lib/firebase/firestore"
 import { uploadProductImage, deleteProductImage } from "@/lib/cloudinary/upload"
 import { isCloudinaryConfigured } from "@/lib/cloudinary/config"
-import { AlertCircle, Loader2, Upload, Info } from "lucide-react"
+import { AlertCircle, Loader2, Upload, Info, AlertTriangle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "@/components/ui/use-toast"
 import Image from "next/image"
@@ -339,6 +339,41 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     </div>
   }
 
+  // If vendor has no delivery areas selected, show a message
+  if (vendorPincodes.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Edit Product</h1>
+        </div>
+
+        <Card className="md:max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle>Delivery Areas Required</CardTitle>
+            <CardDescription>
+              You need to set up your delivery areas before editing products
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert variant="destructive" className="bg-amber-50 border-amber-200">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>No delivery areas configured</AlertTitle>
+              <AlertDescription>
+                Before managing products, you need to configure which pincodes you can deliver to. This is required so customers know where your products are available.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-end">
+              <Button asChild>
+                <a href="/vendor/profile/pincodes">Configure Delivery Areas</a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (isLoading) {
     return <div className="flex justify-center items-center h-64">
       <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
@@ -515,33 +550,25 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
               <CardDescription>Update the pincodes where this product will be available.</CardDescription>
             </CardHeader>
             <CardContent>
-              {vendorPincodes.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {vendorPincodes.map((pincode) => (
-                    <div key={pincode} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`pincode-${pincode}`}
-                        checked={selectedPincodes.includes(pincode)}
-                        onCheckedChange={() => handlePincodeChange(pincode)}
-                      />
-                      <Label htmlFor={`pincode-${pincode}`} className="cursor-pointer">
-                        {pincode}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>No delivery areas found</AlertTitle>
-                  <AlertDescription>
-                    Your account doesn't have any delivery areas configured. Please contact the admin to update your service areas.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {vendorPincodes.length > 0 && selectedPincodes.length === 0 && (
-                <p className="text-xs text-amber-600 mt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {vendorPincodes.map((pincode) => (
+                  <div key={pincode} className="flex items-center space-x-2 p-2 border rounded-md">
+                    <Checkbox
+                      id={`pincode-${pincode}`}
+                      checked={selectedPincodes.includes(pincode)}
+                      onCheckedChange={() => handlePincodeChange(pincode)}
+                    />
+                    <Label
+                      htmlFor={`pincode-${pincode}`}
+                      className="cursor-pointer text-sm"
+                    >
+                      {pincode}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {selectedPincodes.length === 0 && (
+                <p className="text-sm text-red-500 mt-2">
                   * You must select at least one delivery area
                 </p>
               )}

@@ -1,49 +1,42 @@
+import { Suspense } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Loader2 } from "lucide-react"
 import Header from "@/components/header"
 import AddToCartButton from "@/components/add-to-cart-button"
+import { getProductById } from "@/lib/firebase/firestore"
+import { notFound } from "next/navigation"
 
-// Mock data - in a real app, this would come from Firebase
-const allProducts = {
-  f1: {
-    id: "f1",
-    name: "Fresh Apples",
-    price: 120,
-    unit: "1 kg",
-    image: "/placeholder.svg?height=400&width=400",
-    description:
-      "Fresh and juicy apples sourced directly from the orchards. Rich in fiber and vitamin C, these apples are perfect for snacking, baking, or adding to salads.",
-    category: "fruits-vegetables",
-  },
-  d1: {
-    id: "d1",
-    name: "Milk",
-    price: 60,
-    unit: "1 L",
-    image: "/placeholder.svg?height=400&width=400",
-    description:
-      "Fresh pasteurized milk with essential nutrients. Rich in calcium and protein, it's perfect for your daily nutrition needs.",
-    category: "dairy-bread-eggs",
-  },
+interface ProductPageProps {
+  params: {
+    id: string
+  }
 }
 
-export default function ProductPage({ params }: { params: { id: string } }) {
-  const product = allProducts[params.id as keyof typeof allProducts]
+// Define a simplified product type for the cart
+interface CartProduct {
+  id: string
+  name: string
+  price: number
+  unit: string
+  image: string
+}
+
+export default async function ProductPage({ params }: ProductPageProps) {
+  const productId = params.id
+  const product = await getProductById(productId)
 
   if (!product) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header />
-        <div className="container mx-auto px-4 py-12 text-center">
-          <h1 className="text-2xl font-bold mb-4">Product Not Found</h1>
-          <p className="mb-6">The product you're looking for doesn't exist or has been removed.</p>
-          <Link href="/" className="text-green-500 hover:text-green-600 font-medium">
-            Return to Home
-          </Link>
-        </div>
-      </div>
-    )
+    notFound()
+  }
+
+  // Create a simplified product object for the cart
+  const cartProduct: CartProduct = {
+    id: product.id || productId, // Use the params id as fallback
+    name: product.name,
+    price: product.price,
+    unit: product.unit,
+    image: product.image
   }
 
   return (
@@ -74,14 +67,39 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <h1 className="text-2xl font-bold text-gray-800 mb-2">{product.name}</h1>
               <p className="text-gray-500 mb-4">{product.unit}</p>
 
-              <div className="text-3xl font-bold mb-6">₹{product.price}</div>
+              <div className="flex items-baseline gap-3 mb-6">
+                <div className="text-3xl font-bold">₹{product.price}</div>
+                {product.mrp > product.price && (
+                  <>
+                    <div className="text-lg text-gray-500 line-through">₹{product.mrp}</div>
+                    <div className="text-sm text-green-600 font-medium">
+                      {Math.round(((product.mrp - product.price) / product.mrp) * 100)}% off
+                    </div>
+                  </>
+                )}
+              </div>
 
               <p className="text-gray-700 mb-8">{product.description}</p>
 
-              <AddToCartButton product={product} className="mt-auto" />
+              <AddToCartButton product={cartProduct} className="mt-auto" />
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+export function ProductNotFound() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Header />
+      <div className="container mx-auto px-4 py-12 text-center">
+        <h1 className="text-2xl font-bold mb-4">Product Not Found</h1>
+        <p className="mb-6">The product you're looking for doesn't exist or has been removed.</p>
+        <Link href="/" className="text-green-500 hover:text-green-600 font-medium">
+          Return to Home
+        </Link>
       </div>
     </div>
   )

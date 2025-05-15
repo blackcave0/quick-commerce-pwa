@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { BarChart3, Home, LogOut, Package, Settings, ShoppingBag, User } from "lucide-react"
+import { BarChart3, Home, LogOut, Package, Settings, ShoppingBag, User, MapPin } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { useVendor } from "@/lib/context/vendor-provider"
@@ -74,6 +74,11 @@ export function Sidebar() {
             href="/vendor/profile"
             icon={<User className="h-4 w-4" />}
             label="Profile"
+          />
+          <SidebarNavItem
+            href="/vendor/profile/pincodes"
+            icon={<MapPin className="h-4 w-4" />}
+            label="Delivery Areas"
           />
           <SidebarNavItem
             href="/vendor/analytics"

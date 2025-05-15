@@ -39,14 +39,7 @@ The application was experiencing 400 Bad Request errors when trying to write to 
 ## Additional Recommendations
 1. Create a `.env.local` file in your project root with your Firebase configuration:
 ```
-NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyAKg3CZIAW14Il0n1M6D0DcnUQw31e_4l0
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=buzzat-del-app.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=buzzat-del-app
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=buzzat-del-app.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=223604858508
-NEXT_PUBLIC_FIREBASE_APP_ID=1:223604858508:web:f2e72a2344dd44d61ba5a9
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-R6BG1Q00R6
-```
+
 
 2. For local development with emulators, add:
 ```

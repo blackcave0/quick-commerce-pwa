@@ -4,7 +4,25 @@ import PincodeSelector from "@/components/pincode-selector"
 import CategoryGrid from "@/components/category-grid"
 import FeaturedBanner from "@/components/featured-banner"
 import ProductSlider from "@/components/product-slider"
+import ProductDebug from "@/components/product-debug"
 import { Skeleton } from "@/components/ui/skeleton"
+import DynamicCategorySlider from "@/components/dynamic-category-slider"
+
+// Define categories to be displayed on the homepage
+const featuredCategories = [
+  {
+    id: "fruits-vegetables",
+    name: "Fruits & Vegetables"
+  },
+  {
+    id: "dairy-bread-eggs",
+    name: "Dairy, Bread & Eggs"
+  },
+  {
+    id: "grocery",
+    name: "Grocery & Staples"
+  }
+]
 
 export default function Home() {
   return (
@@ -12,56 +30,44 @@ export default function Home() {
       <Header />
       <div className="container mx-auto px-4 pb-20">
         <PincodeSelector />
+
         <Suspense fallback={<BannerSkeleton />}>
           <FeaturedBanner />
         </Suspense>
+
         <div className="my-6">
           <h2 className="text-2xl font-bold text-orange-600 mb-4">Shop by Category</h2>
           <Suspense fallback={<CategorySkeleton />}>
             <CategoryGrid />
           </Suspense>
         </div>
-        <div className="my-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Fruits & Vegetables</h2>
-            <a href="/category/fruits-vegetables" className="text-green-600 font-medium">
-              see all
-            </a>
-          </div>
+
+        {/* Dynamic Category Slider that shows only categories with available products */}
+        <div className="my-8">
+          <h2 className="text-2xl font-bold text-orange-600 mb-6">Available in Your Area</h2>
           <Suspense fallback={<ProductSliderSkeleton />}>
-            <ProductSlider category="fruits-vegetables" />
+            <DynamicCategorySlider />
           </Suspense>
         </div>
-        <div className="my-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Dairy, Bread & Eggs</h2>
-            <a href="/category/dairy-bread-eggs" className="text-green-600 font-medium">
-              see all
-            </a>
-          </div>
-          <Suspense fallback={<ProductSliderSkeleton />}>
-            <ProductSlider category="dairy-bread-eggs" />
-          </Suspense>
-        </div>
+
+        {/* Debug tool to help diagnose product issues */}
+        <ProductDebug />
       </div>
     </main>
   )
 }
 
 function BannerSkeleton() {
-  return <div className="w-full h-48 rounded-lg bg-gray-200 animate-pulse" />
+  return <Skeleton className="w-full h-48 rounded-lg" />
 }
 
 function CategorySkeleton() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-      {Array(12)
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {Array(6)
         .fill(0)
         .map((_, i) => (
-          <div key={i} className="flex flex-col items-center">
-            <Skeleton className="h-24 w-24 rounded-full" />
-            <Skeleton className="h-4 w-20 mt-2" />
-          </div>
+          <Skeleton key={i} className="aspect-square rounded-lg" />
         ))}
     </div>
   )
@@ -73,13 +79,13 @@ function ProductSliderSkeleton() {
       {Array(6)
         .fill(0)
         .map((_, i) => (
-          <div key={i} className="min-w-[180px] p-4 border rounded-lg bg-white">
-            <Skeleton className="h-32 w-full rounded-md" />
-            <Skeleton className="h-4 w-3/4 mt-2" />
-            <Skeleton className="h-4 w-1/2 mt-2" />
-            <div className="flex justify-between items-center mt-4">
+          <div key={i} className="w-44 flex-shrink-0">
+            <Skeleton className="h-44 w-44 rounded-lg" />
+            <Skeleton className="h-4 w-32 mt-2" />
+            <Skeleton className="h-4 w-16 mt-1" />
+            <div className="flex justify-between mt-2">
               <Skeleton className="h-6 w-16" />
-              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-6 w-6 rounded-full" />
             </div>
           </div>
         ))}
