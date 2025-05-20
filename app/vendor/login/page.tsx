@@ -4,11 +4,13 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { useVendor } from "@/lib/context/vendor-provider"
-import { AlertCircle, Info } from "lucide-react"
+import { AlertCircle, Info, ShieldCheck } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import DirectTestLogin from "./direct-test-login"
+import { setVendorSessionCookies } from "@/lib/firebase/set-session-cookie"
+import LoginDebug from "./debug"
 
 export default function VendorLogin() {
   const { login, isLoading, isAuthenticated, vendor } = useVendor()
@@ -19,43 +21,23 @@ export default function VendorLogin() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
 
-  // Helper function to set cookies
-  const setCookie = (name: string, value: string, days: number) => {
-    if (typeof document === 'undefined') return;
-    let expires = "";
-    if (days) {
-      const date = new Date();
-      date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-      expires = "; expires=" + date.toUTCString();
-    }
-    document.cookie = name + "=" + value + expires + "; path=/";
-  }
-
   // Check if already logged in and redirect
   useEffect(() => {
     if (isAuthenticated && vendor) {
-      console.log("Already authenticated, attempting direct navigation to dashboard");
+      console.log("Already authenticated, setting session cookies");
 
-      // Set test mode cookie if using test account
-      if (process.env.NODE_ENV === 'development' && vendor.id === 'test-vendor-id') {
-        console.log("Setting test mode cookie for middleware bypass");
-        setCookie('testMode', 'true', 1);
-      }
+      // Set session cookies with the vendor's ID
+      setVendorSessionCookies(
+        vendor.uid || vendor.id, // Use UID if available, otherwise ID
+        process.env.NODE_ENV === 'development' &&
+        (vendor.email === 'test@example.com' || vendor.id === 'test-vendor-id')
+      );
 
-      // Try both methods for redirection to ensure it works
-      try {
-        router.push("/vendor");
-      } catch (e) {
-        console.error("Router push failed:", e);
-      }
-
-      // Use a direct window location change as a fallback
+      // Delay redirect slightly to ensure cookies are set
       setTimeout(() => {
-        if (typeof window !== 'undefined') {
-          console.log("Forcing redirection via window.location");
-          window.location.href = "/vendor";
-        }
-      }, 500);
+        console.log("Redirecting to dashboard");
+        router.push("/vendor");
+      }, 100);
     }
   }, [isAuthenticated, vendor, router]);
 
@@ -85,51 +67,77 @@ export default function VendorLogin() {
     e.preventDefault()
     setError(null)
     setIsSubmitting(true)
-
-    // For dev mode test account, log information
-    if (email === "test@example.com" && password === "password") {
-      console.log("Attempting to login with test account")
-    }
+    let loginSuccessful = false;
 
     try {
       console.log("Logging in with email:", email)
       const result = await login(email, password)
+      loginSuccessful = result.success;
 
       if (result.success) {
-        console.log("Login successful, forcing navigation to vendor dashboard")
+        console.log("Login successful");
 
-        // Set test mode cookie if using test account
+        // For test account in development, use hardcoded values
         if (process.env.NODE_ENV === 'development' && email === 'test@example.com') {
-          console.log("Setting test mode cookie for middleware bypass");
-          setCookie('testMode', 'true', 1);
-
-          // Also set a session cookie for the middleware
-          setCookie('session', 'test-session', 1);
-        }
-
-        // Try both methods for redirection to ensure it works
-        try {
+          const testVendorId = 'test-vendor-id';
+          console.log("Setting test account session cookies with ID:", testVendorId);
+          setVendorSessionCookies(testVendorId, true);
           router.push("/vendor");
-        } catch (e) {
-          console.error("Router push failed:", e);
+          return;
         }
 
-        // Use a direct window location change as a fallback with a slight delay
-        setTimeout(() => {
-          if (typeof window !== 'undefined') {
-            console.log("Forcing redirection via window.location");
-            window.location.href = "/vendor";
+        // For real accounts, wait for vendor state to update and check multiple times
+        let attempts = 0;
+        const maxAttempts = 5;
+        const checkInterval = 200; // ms
+
+        const checkVendorData = () => {
+          attempts++;
+          console.log(`Checking vendor data (attempt ${attempts}/${maxAttempts})...`);
+
+          if (vendor && (vendor.id || vendor.uid)) {
+            // We have vendor data with an ID
+            const vendorId = vendor.uid || vendor.id;
+            console.log("Vendor data available. Setting session cookies with ID:", vendorId);
+
+            // Set session cookies and redirect
+            setVendorSessionCookies(
+              vendorId,
+              process.env.NODE_ENV === 'development' && vendor.email === 'test@example.com'
+            );
+            router.push("/vendor");
+          } else if (attempts < maxAttempts) {
+            // Try again after a short delay
+            setTimeout(checkVendorData, checkInterval);
+          } else {
+            // Give up after max attempts
+            console.error("No vendor ID available after maximum attempts");
+            setError("Authentication error: Could not retrieve vendor details");
+            setIsSubmitting(false);
           }
-        }, 500);
+        };
+
+        // Start checking for vendor data
+        checkVendorData();
       } else if (result.error) {
         console.error("Login failed:", result.error)
-        setError(result.error.message)
+
+        // Set specific error message for inactive vendors
+        if (result.error.message.includes("not active") ||
+          result.error.message.includes("pending") ||
+          result.error.message.includes("blocked")) {
+          setError("Your vendor account is not active. Please contact the admin for approval.")
+        } else {
+          setError(result.error.message)
+        }
       }
     } catch (error: any) {
       console.error("Login error:", error)
       setError(error.message || "Failed to login. Please try again.")
     } finally {
-      setIsSubmitting(false)
+      if (!loginSuccessful) {
+        setIsSubmitting(false)
+      }
     }
   }
 
@@ -145,9 +153,8 @@ export default function VendorLogin() {
     setEmail("test@example.com");
     setPassword("password");
 
-    // Set test cookie directly
-    setCookie('testMode', 'true', 1);
-    setCookie('session', 'test-session', 1);
+    // Set session cookies for test account
+    setVendorSessionCookies('test-vendor-id', true);
 
     // Attempt immediate redirection
     if (typeof window !== 'undefined') {
@@ -171,6 +178,15 @@ export default function VendorLogin() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          <Alert className="mb-4">
+            <ShieldCheck className="h-4 w-4" />
+            <AlertTitle>Admin Approval Required</AlertTitle>
+            <AlertDescription>
+              Only vendors that have been approved by an admin can login.
+              If you're having trouble logging in, please contact support.
+            </AlertDescription>
+          </Alert>
 
           {showDevHelp && (
             <Alert className="mb-4">
@@ -236,8 +252,18 @@ export default function VendorLogin() {
           </form>
 
           {/* Emergency bypass for development mode */}
-          {process.env.NODE_ENV === 'development' && <DirectTestLogin />}
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <DirectTestLogin />
+              <LoginDebug />
+            </>
+          )}
         </CardContent>
+        <CardFooter className="text-center text-sm text-gray-500">
+          <p className="w-full">
+            Your vendor account must be created and approved by an administrator before you can log in.
+          </p>
+        </CardFooter>
       </Card>
     </div>
   )

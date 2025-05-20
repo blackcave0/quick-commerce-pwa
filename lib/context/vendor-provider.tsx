@@ -6,19 +6,27 @@ import { useRouter } from "next/navigation"
 import { signInVendor, signOutVendor, getCurrentVendorData } from "@/lib/firebase/vendor-auth"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase/config"
+import { getAuth } from "firebase/auth"
 
 // Vendor types
 export interface VendorProfile {
   id: string
+  uid?: string        // Firebase Auth UID
   name: string
   email: string
   phone: string
   address: string
-  pincode: string
+  pincode?: string
+  pincodes?: string[]  // Service areas
   fssai?: string
   gstin?: string
-  isOpen: boolean
+  isOpen?: boolean
+  role?: "vendor"
   status: "active" | "pending" | "blocked"
+  productsCount?: number
+  joinedDate?: string
+  profileComplete?: boolean
+
 }
 
 interface VendorContextType {
@@ -60,81 +68,186 @@ export const VendorProvider = ({ children }: { children: ReactNode }) => {
         console.log("Using test vendor data in development mode");
         const testVendor: VendorProfile = {
           id: 'test-vendor-id',
+          uid: 'test-vendor-id',
           name: 'Test Vendor',
           email: 'test@example.com',
           phone: '1234567890',
           address: 'Test Address',
           pincode: '123456',
+          pincodes: ['123456'],
           isOpen: true,
-          status: "active"
+          role: 'vendor',
+          status: "active",
+          productsCount: 0,
+          joinedDate: new Date().toISOString(),
+          profileComplete: true
         };
         setVendor(testVendor);
         setIsAuthenticated(true);
         setIsLoading(false);
-        return;
+        return testVendor;
       }
 
-      const vendorDoc = await getDoc(doc(db, "vendors", userId))
+      const vendorDoc = await getDoc(doc(db, "vendors", userId));
 
+      // First try with direct vendor ID
       if (vendorDoc.exists()) {
-        const vendorData = vendorDoc.data() as Omit<VendorProfile, "id">
-        setVendor({
+        const vendorData = vendorDoc.data() as Omit<VendorProfile, "id">;
+        const vendor = {
           id: vendorDoc.id,
           ...vendorData,
-        })
-        setIsAuthenticated(true)
-      } else {
-        // If vendor data doesn't exist, sign out
-        await signOutVendor()
-        setIsAuthenticated(false)
-        setVendor(null)
+        };
+        setVendor(vendor);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return vendor;
       }
+
+      // Try with vendor_ prefix
+      const prefixedId = `vendor_${userId}`;
+      const prefixedVendorDoc = await getDoc(doc(db, "vendors", prefixedId));
+
+      if (prefixedVendorDoc.exists()) {
+        const vendorData = prefixedVendorDoc.data() as Omit<VendorProfile, "id">;
+        const vendor = {
+          id: prefixedVendorDoc.id,
+          ...vendorData,
+        };
+        setVendor(vendor);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+        return vendor;
+      }
+
+      // If vendor data doesn't exist, sign out
+      console.error("No vendor document found for user:", userId);
+      await signOutVendor();
+      setIsAuthenticated(false);
+      setVendor(null);
+      setIsLoading(false);
+      return null;
     } catch (error) {
-      console.error("Error fetching vendor data:", error)
-      setIsAuthenticated(false)
-      setVendor(null)
-    } finally {
-      setIsLoading(false)
+      console.error("Error fetching vendor data:", error);
+      setIsAuthenticated(false);
+      setVendor(null);
+      setIsLoading(false);
+      return null;
     }
-  }
+  };
 
   // Refresh vendor data (used after profile updates)
   const refreshVendorData = async () => {
     try {
-      const result = await getCurrentVendorData()
-      if (result.success && result.vendorData) {
-        setVendor(result.vendorData as VendorProfile)
+      setIsLoading(true);
+
+      // For test account in development
+      if (process.env.NODE_ENV === 'development' && vendor?.email === 'test@example.com') {
+        console.log("Refreshing test vendor data");
+        // Test vendor data is already in state, just update state to trigger re-render
+        const testVendor: VendorProfile = {
+          id: 'test-vendor-id',
+          uid: 'test-vendor-id',
+          name: 'Test Vendor',
+          email: 'test@example.com',
+          phone: '1234567890',
+          address: 'Test Address',
+          pincode: '123456',
+          pincodes: ['123456'],
+          isOpen: true,
+          role: 'vendor',
+          status: "active",
+          productsCount: 0,
+          joinedDate: new Date().toISOString(),
+          profileComplete: true
+        };
+
+        setVendor({ ...testVendor });
+        setIsLoading(false);
+        return;
+      }
+
+      // For real users, fetch fresh data
+      const auth = getAuth();
+      if (!auth || !auth.currentUser) {
+        console.error("Cannot refresh vendor data: No authenticated user");
+        setIsLoading(false);
+        return;
+      }
+
+      // Get the current user ID
+      const userId = auth.currentUser.uid;
+      console.log("Refreshing vendor data for user:", userId);
+
+      // Fetch the vendor data directly
+      if (vendor?.id) {
+        // If we know the vendor document ID, fetch it directly
+        const vendorDoc = await getDoc(doc(db, "vendors", vendor.id));
+
+        if (vendorDoc.exists()) {
+          const vendorData = vendorDoc.data() as Omit<VendorProfile, "id">;
+          setVendor({
+            id: vendorDoc.id,
+            ...vendorData,
+          });
+          console.log("Vendor data refreshed successfully");
+        } else {
+          console.error("Vendor document not found:", vendor.id);
+        }
+      } else {
+        // Otherwise, try to find the vendor by user ID
+        await fetchVendorData(userId);
       }
     } catch (error) {
-      console.error("Error refreshing vendor data:", error)
+      console.error("Error refreshing vendor data:", error);
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   // Check auth state on mount (client-side only)
   useEffect(() => {
     if (isMounted) {
-      setIsLoading(true)
+      setIsLoading(true);
       let unsubscribed = false;
 
       console.log("Setting up auth state listener");
 
-      const unsubscribe = onAuthStateChange(async (user) => {
+      const unsubscribePromise = onAuthStateChange(async (user) => {
         if (unsubscribed) return;
 
         console.log("Auth state changed:", user ? `User: ${user.uid}` : "No user");
 
         if (user) {
-          await fetchVendorData(user.uid)
+          const vendorData = await fetchVendorData(user.uid);
+          if (!vendorData) {
+            console.error("Could not fetch vendor data for user:", user.uid);
+            setIsAuthenticated(false);
+            setVendor(null);
+          } else {
+            console.log("Vendor data fetched successfully:", vendorData.id);
+          }
         } else {
-          setIsAuthenticated(false)
-          setVendor(null)
-          setIsLoading(false)
+          setIsAuthenticated(false);
+          setVendor(null);
+          setIsLoading(false);
         }
-      })
+      });
 
       return () => {
         unsubscribed = true;
-        unsubscribe()
+        // Handle the unsubscribe promise properly
+        if (unsubscribePromise instanceof Promise) {
+          unsubscribePromise.then((unsubscribeFn: (() => void) | undefined) => {
+            if (typeof unsubscribeFn === 'function') {
+              unsubscribeFn();
+            }
+          }).catch((err: Error) => {
+            console.error("Error unsubscribing from auth state:", err);
+          });
+        } else if (typeof unsubscribePromise === 'function') {
+          // If it's already a function, call it directly
+          unsubscribePromise();
+        }
       }
     }
   }, [isMounted]);
@@ -152,13 +265,19 @@ export const VendorProvider = ({ children }: { children: ReactNode }) => {
         // Set vendor data directly for test account
         const testVendor: VendorProfile = {
           id: 'test-vendor-id',
+          uid: 'test-vendor-id',
           name: 'Test Vendor',
           email: 'test@example.com',
           phone: '1234567890',
           address: 'Test Address',
           pincode: '123456',
+          pincodes: ['123456'],
           isOpen: true,
-          status: "active"
+          role: 'vendor',
+          status: "active",
+          productsCount: 0,
+          joinedDate: new Date().toISOString(),
+          profileComplete: true
         };
 
         setVendor(testVendor);
@@ -169,21 +288,36 @@ export const VendorProvider = ({ children }: { children: ReactNode }) => {
         return { success: true };
       }
 
-      const result = await signInVendor(email, password)
+      const result = await signInVendor(email, password);
 
       if (result.success && result.vendorData) {
-        setVendor(result.vendorData as VendorProfile)
-        setIsAuthenticated(true)
-        console.log("Vendor authenticated successfully");
-        return { success: true }
+        // Ensure we have a vendor ID before proceeding
+        if (!result.vendorData.id) {
+          console.error("No vendor ID returned from authentication");
+          return { success: false, error: new Error("No vendor ID available") };
+        }
+
+        // Update vendor state immediately with data from signInVendor
+        const vendorData = result.vendorData as VendorProfile;
+        console.log("Setting vendor data to:", vendorData.id);
+
+        // Force a clean state update
+        setVendor(null);
+        setTimeout(() => {
+          setVendor(vendorData);
+          setIsAuthenticated(true);
+          console.log("Vendor authenticated successfully with ID:", vendorData.id);
+        }, 0);
+
+        return { success: true };
       }
 
-      return { success: false, error: result.error }
+      return { success: false, error: result.error };
     } catch (error: any) {
       console.error("Login error:", error);
-      return { success: false, error: new Error(error.message || "Login failed") }
+      return { success: false, error: new Error(error.message || "Login failed") };
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
