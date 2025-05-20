@@ -114,19 +114,17 @@ export default function VendorProfilePage() {
       )}
 
       {isSaved && (
-        <Alert className="bg-green-50 border-green-200">
+        <Alert className="bg-green-50 mb-4">
           <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-600">Profile updated successfully</AlertDescription>
+          <AlertDescription className="text-green-600">Profile saved successfully!</AlertDescription>
         </Alert>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Store Information</CardTitle>
-            <CardDescription>
-              Update your store details that will be visible to customers
-            </CardDescription>
+            <CardTitle>Store Profile</CardTitle>
+            <CardDescription>Update your store information that will be shown to customers.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -164,7 +162,7 @@ export default function VendorProfilePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pincode">Pincode</Label>
+                <Label htmlFor="pincode">Store Pincode</Label>
                 <Input
                   id="pincode"
                   name="pincode"
@@ -187,47 +185,77 @@ export default function VendorProfilePage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fssai">FSSAI License Number</Label>
-                <Input
-                  id="fssai"
-                  name="fssai"
-                  value={formData.fssai}
-                  onChange={handleChange}
-                  placeholder="Optional"
-                />
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <Label htmlFor="delivery-areas" className="mb-2 block">Delivery Areas</Label>
+                <div className="text-sm text-gray-600 flex items-center gap-2">
+                  <span>
+                    {vendor.pincodes?.length ?
+                      `${vendor.pincodes.length} delivery areas selected` :
+                      "No delivery areas set"}
+                  </span>
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="gstin">GSTIN</Label>
-                <Input
-                  id="gstin"
-                  name="gstin"
-                  value={formData.gstin}
-                  onChange={handleChange}
-                  placeholder="Optional"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isOpen"
-                checked={formData.isOpen}
-                onCheckedChange={handleSwitchChange}
-              />
-              <Label htmlFor="isOpen">Store is open for orders</Label>
+              <Button variant="outline" asChild className="mt-auto">
+                <a href="/vendor/profile/pincodes">Manage Delivery Areas</a>
+              </Button>
             </div>
           </CardContent>
-          <CardFooter>
-            <Button disabled={isLoading} type="submit">
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? "Saving..." : "Save Changes"}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Additional Details</CardTitle>
+            <CardDescription>Add your FSSAI license, GSTIN, and other details.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fssai">FSSAI License Number</Label>
+              <Input
+                id="fssai"
+                name="fssai"
+                value={formData.fssai}
+                onChange={handleChange}
+                placeholder="e.g., 12345678901234"
+              />
+              <p className="text-xs text-gray-500">Required for food products</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gstin">GSTIN</Label>
+              <Input
+                id="gstin"
+                name="gstin"
+                value={formData.gstin}
+                onChange={handleChange}
+                placeholder="e.g., 22AAAAA0000A1Z5"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="isOpen">Store Status</Label>
+                <Switch
+                  id="isOpen"
+                  checked={formData.isOpen}
+                  onCheckedChange={handleSwitchChange}
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                {formData.isOpen
+                  ? "Your store is open and accepting orders"
+                  : "Your store is closed and not accepting orders"}
+              </p>
+            </div>
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            <Button onClick={handleSubmit} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
             </Button>
           </CardFooter>
         </Card>
-      </form>
+      </div>
     </div>
   )
 } 

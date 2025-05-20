@@ -2,23 +2,42 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { usePincode } from "@/lib/hooks/use-pincode"
 
 export default function PincodeSelector() {
-  const [pincode, setPincode] = useState("110001")
+  const { pincode, updatePincode, isLoading } = usePincode()
   const [inputPincode, setInputPincode] = useState("")
   const [open, setOpen] = useState(false)
+
+  // Update input pincode when pincode changes
+  useEffect(() => {
+    if (pincode) {
+      setInputPincode(pincode)
+    }
+  }, [pincode])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (inputPincode.length === 6 && /^\d+$/.test(inputPincode)) {
-      setPincode(inputPincode)
+      updatePincode(inputPincode)
       setOpen(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="py-4">
+        <Button variant="ghost" className="text-blue-600 p-0 h-auto font-normal" disabled>
+          <MapPin size={16} className="mr-1" />
+          <span>Loading...</span>
+        </Button>
+      </div>
+    )
   }
 
   return (
@@ -27,8 +46,9 @@ export default function PincodeSelector() {
         <DialogTrigger asChild>
           <Button variant="ghost" className="text-blue-600 p-0 h-auto font-normal">
             <MapPin size={16} className="mr-1" />
-            <span>Please select the pincode. </span>
-            <span className="font-medium ml-1">Change Pincode</span>
+            <span>Delivery to: </span>
+            <span className="font-medium ml-1">{pincode}</span>
+            <span className="font-medium ml-1 text-green-600">Change</span>
           </Button>
         </DialogTrigger>
         <DialogContent>

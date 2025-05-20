@@ -45,7 +45,7 @@ interface Product {
   unit: string
   stock: number
   vendorId: string
-  pincodes: string[]
+  pincodes?: string[]
   status: "active" | "out_of_stock" | "deleted"
 }
 
@@ -67,46 +67,6 @@ export default function VendorProductsPage() {
       setError(null)
 
       try {
-        // For test vendor in development
-        if (process.env.NODE_ENV === 'development' && vendor.id === 'test-vendor-id') {
-          // Return mock data after a short delay to simulate API call
-          setTimeout(() => {
-            const mockProducts: Product[] = [
-              {
-                id: 'test-product-1',
-                name: 'Test Product 1',
-                description: 'This is a test product',
-                category: 'grocery',
-                price: 99,
-                mrp: 120,
-                image: '/placeholder.svg',
-                unit: 'pcs',
-                stock: 100,
-                vendorId: 'test-vendor-id',
-                pincodes: ['110001', '110002'],
-                status: 'active'
-              },
-              {
-                id: 'test-product-2',
-                name: 'Test Product 2',
-                description: 'This is another test product',
-                category: 'fruits-vegetables',
-                price: 50,
-                mrp: 60,
-                image: '/placeholder.svg',
-                unit: 'kg',
-                stock: 20,
-                vendorId: 'test-vendor-id',
-                pincodes: ['110001'],
-                status: 'out_of_stock'
-              }
-            ];
-            setProducts(mockProducts);
-            setIsLoading(false);
-          }, 500);
-          return;
-        }
-
         const productsQuery = query(
           collection(db, "products"),
           where("vendorId", "==", vendor.id),
@@ -134,22 +94,6 @@ export default function VendorProductsPage() {
   const toggleProductStatus = async (productId: string, currentStatus: Product["status"]) => {
     try {
       const newStatus = currentStatus === "active" ? "out_of_stock" : "active"
-
-      // For test vendor in development
-      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
-        // Update local state only
-        setProducts(products.map(product =>
-          product.id === productId
-            ? { ...product, status: newStatus }
-            : product
-        ))
-
-        toast({
-          title: "Status updated",
-          description: `Product is now ${newStatus === "active" ? "in stock" : "out of stock"}.`,
-        })
-        return;
-      }
 
       await updateDoc(doc(db, "products", productId), {
         status: newStatus
@@ -185,25 +129,6 @@ export default function VendorProductsPage() {
     if (!editingProduct) return
 
     try {
-      // For test vendor in development
-      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
-        // Update local state only
-        setProducts(products.map(product =>
-          product.id === editingProduct.id
-            ? { ...product, price: editingProduct.price }
-            : product
-        ))
-
-        toast({
-          title: "Price updated",
-          description: "Product price has been updated successfully.",
-        })
-
-        // Clear editing state
-        setEditingProduct(null)
-        return;
-      }
-
       await updateDoc(doc(db, "products", editingProduct.id), {
         price: editingProduct.price
       })
@@ -238,21 +163,6 @@ export default function VendorProductsPage() {
     setIsDeleting(true);
 
     try {
-      // For test vendor in development
-      if (process.env.NODE_ENV === 'development' && vendor?.id === 'test-vendor-id') {
-        // Update local state only to remove the product
-        setProducts(products.filter(p => p.id !== productToDelete.id));
-
-        toast({
-          title: "Product deleted",
-          description: "Product has been deleted successfully.",
-        });
-
-        setProductToDelete(null);
-        setIsDeleting(false);
-        return;
-      }
-
       // First, delete the product image from Cloudinary if it exists
       if (productToDelete.imagePublicId) {
         try {

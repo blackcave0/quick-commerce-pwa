@@ -322,36 +322,51 @@ export default function AddProductPage() {
     </div>
   }
 
+  // If vendor has no delivery areas selected, show a message
+  if (vendorPincodes.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Add Product</h1>
+        </div>
+
+        <Card className="md:max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle>Delivery Areas Required</CardTitle>
+            <CardDescription>
+              You need to set up your delivery areas before adding products
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert variant="destructive" className="bg-amber-50 border-amber-200">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>No delivery areas configured</AlertTitle>
+              <AlertDescription>
+                Before adding products, you need to configure which pincodes you can deliver to. This is required so customers know where your products are available.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex justify-end">
+              <Button asChild>
+                <a href="/vendor/profile/pincodes">Configure Delivery Areas</a>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center">
-        <h1 className="text-2xl font-bold">Add New Product</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Add Product</h1>
       </div>
 
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            {error}
-            {error.includes('configuration') && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-4"
-                onClick={checkConfig}
-                disabled={isConfigChecking}
-              >
-                {isConfigChecking ? (
-                  <>
-                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                    Checking...
-                  </>
-                ) : (
-                  'Check Cloudinary Config'
-                )}
-              </Button>
-            )}
-          </AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
@@ -571,36 +586,30 @@ export default function AddProductPage() {
           <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle>Availability</CardTitle>
-              <CardDescription>Select the pincodes where this product will be available.</CardDescription>
+              <CardDescription>
+                Select the areas where this product will be available for delivery
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              {vendorPincodes.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {vendorPincodes.map((pincode) => (
-                    <div key={pincode} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`pincode-${pincode}`}
-                        checked={selectedPincodes.includes(pincode)}
-                        onCheckedChange={() => handlePincodeChange(pincode)}
-                      />
-                      <Label htmlFor={`pincode-${pincode}`} className="cursor-pointer">
-                        {pincode}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertTitle>No delivery areas found</AlertTitle>
-                  <AlertDescription>
-                    Your account doesn't have any delivery areas configured. Please contact the admin to update your service areas.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {vendorPincodes.length > 0 && selectedPincodes.length === 0 && (
-                <p className="text-xs text-amber-600 mt-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {vendorPincodes.map((pincode) => (
+                  <div key={pincode} className="flex items-center space-x-2 p-2 border rounded-md">
+                    <Checkbox
+                      id={`pincode-${pincode}`}
+                      checked={selectedPincodes.includes(pincode)}
+                      onCheckedChange={() => handlePincodeChange(pincode)}
+                    />
+                    <Label
+                      htmlFor={`pincode-${pincode}`}
+                      className="cursor-pointer text-sm"
+                    >
+                      {pincode}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {selectedPincodes.length === 0 && (
+                <p className="text-sm text-red-500 mt-2">
                   * You must select at least one delivery area
                 </p>
               )}
